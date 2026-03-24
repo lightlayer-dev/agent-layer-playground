@@ -10,7 +10,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { getLandingPage } from "./landing";
 import ecommerceApp from "./demos/ecommerce";
-import saasApp from "./demos/saas";
+import { crmApp } from "./demos/crm";
 import contentApp from "./demos/content";
 import fintechApp from "./demos/fintech";
 
@@ -32,7 +32,7 @@ app.get("/llms.txt", (c) => {
 ## Demo APIs
 
 - /demo/ecommerce — E-Commerce API (products, cart, orders)
-- /demo/saas — SaaS Platform API (users, teams, billing)
+- /demo/crm — CRM API (contacts, companies, deals, pipeline)
 - /demo/content — Content CMS API (posts, comments, tags)
 - /demo/fintech — Fintech Banking API (accounts, transactions)
 
@@ -59,13 +59,13 @@ Allow: /
 
 # Demo APIs
 MCP: /demo/ecommerce/mcp
-MCP: /demo/saas/mcp
+MCP: /demo/crm/mcp
 MCP: /demo/content/mcp
 MCP: /demo/fintech/mcp
 
 # Discovery
 AI-Discovery: /demo/ecommerce/.well-known/ai
-AI-Discovery: /demo/saas/.well-known/ai
+AI-Discovery: /demo/crm/.well-known/ai
 AI-Discovery: /demo/content/.well-known/ai
 AI-Discovery: /demo/fintech/.well-known/ai
 
@@ -81,7 +81,7 @@ app.get("/.well-known/ai", (c) => {
     url: "https://agent-layer-playground.pages.dev",
     demos: [
       { name: "E-Commerce API", prefix: "/demo/ecommerce", mcp: "/demo/ecommerce/mcp" },
-      { name: "SaaS Platform API", prefix: "/demo/saas", mcp: "/demo/saas/mcp" },
+      { name: "CRM API", prefix: "/demo/crm", mcp: "/demo/crm/mcp" },
       { name: "Content CMS API", prefix: "/demo/content", mcp: "/demo/content/mcp" },
       { name: "Fintech Banking API", prefix: "/demo/fintech", mcp: "/demo/fintech/mcp" },
     ],
@@ -90,7 +90,7 @@ app.get("/.well-known/ai", (c) => {
 
 // ── Mount demo APIs ──
 app.route("/demo/ecommerce", ecommerceApp);
-app.route("/demo/saas", saasApp);
+app.route("/demo/crm", crmApp);
 app.route("/demo/content", contentApp);
 app.route("/demo/fintech", fintechApp);
 
