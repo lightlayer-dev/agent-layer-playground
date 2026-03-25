@@ -27,7 +27,9 @@ export function attachAgentLayer(app: Hono, config: DemoConfig) {
   // ── Real agent-layer middleware ──
 
   // Security headers (HSTS, CSP, etc.)
-  app.use("*", securityHeaders());
+  app.use("*", securityHeaders({
+    csp: "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' https:",
+  }));
 
   // Rate limiting
   app.use("*", rateLimits({ max: 1000, windowMs: 3_600_000 }));

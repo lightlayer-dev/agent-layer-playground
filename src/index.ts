@@ -29,7 +29,9 @@ const app = new Hono();
 
 // ── Global middleware via @agent-layer/hono ──
 app.use("*", cors());
-app.use("*", securityHeaders());
+app.use("*", securityHeaders({
+  csp: "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' https:",
+}));
 app.use("*", rateLimits({ max: 1000, windowMs: 3_600_000 }));
 app.onError(agentErrors());
 
