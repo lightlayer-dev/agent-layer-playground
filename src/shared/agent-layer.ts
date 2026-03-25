@@ -1,122 +1,106 @@
-// ── Agent-Layer middleware factory ──
+// ── Agent-Layer middleware using @agent-layer/hono ──
 //
-// Creates a Hono sub-app with all agent-readiness features for a demo:
-// - llms.txt, agents.txt, .well-known/ai, .well-known/agent.json
-// - OpenAPI 3.0 spec, MCP endpoint
-// - Structured error handling, rate-limit headers
+// Uses the real agent-layer library instead of hand-rolling features.
+// Custom MCP and OpenAPI remain demo-specific since they need tool handlers.
 
 import { Hono } from "hono";
+import {
+  rateLimits,
+  agentErrors,
+  notFoundHandler,
+  llmsTxtRoutes,
+  discoveryRoutes,
+  a2aRoutes,
+  agentsTxtRoutes,
+  robotsTxtRoutes,
+  securityHeaders,
+} from "@agent-layer/hono";
 import type { DemoConfig, EndpointDef, ParameterDef } from "./types";
 import { createMcpHandler } from "./mcp";
 
-const BASE_URL = "https://agent-layer-playground.pages.dev";
+const BASE_URL = "https://agent-layer-playground.lightlayer.workers.dev";
 
 /** Attach all agent-layer routes to the given Hono app */
 export function attachAgentLayer(app: Hono, config: DemoConfig) {
   const { name, description, prefix, version, tools, endpoints, skills } = config;
 
-  // ── Rate-limit headers (simulated) ──
-  app.use("*", async (c, next) => {
-    await next();
-    c.header("X-RateLimit-Limit", "1000");
-    c.header("X-RateLimit-Remaining", "999");
-    c.header("X-RateLimit-Reset", String(Math.floor(Date.now() / 1000) + 3600));
-  });
+  // ── Real agent-layer middleware ──
 
-  // ── Structured error handler ──
-  app.onError((err, c) => {
-    console.error(`[${name}]`, err);
-    return c.json(
+  // Security headers (HSTS, CSP, etc.)
+  app.use("*", securityHeaders());
+
+  // Rate limiting
+  app.use("*", rateLimits({ max: 1000, windowMs: 3_600_000 }));
+
+  // Structured error handler
+  app.onError(agentErrors());
+
+  // ── llms.txt via @agent-layer/hono ──
+  const llmsHandlers = llmsTxtRoutes({
+    title: name,
+    description,
+    sections: [
       {
-        ok: false,
-        error: {
-          code: "INTERNAL_ERROR",
-          message: err.message || "An unexpected error occurred",
-        },
+        title: "Endpoints",
+        content: endpoints
+          .map(
+            (ep) =>
+              `### ${ep.method} ${ep.path}\n${ep.summary}\n${ep.description}${
+                ep.parameters
+                  ? "\nParameters:\n" +
+                    ep.parameters
+                      .map((p: ParameterDef) => `  - ${p.name} (${p.in}): ${p.description}`)
+                      .join("\n")
+                  : ""
+              }`
+          )
+          .join("\n\n"),
       },
-      500
-    );
+      {
+        title: "Agent Features",
+        content: [
+          `- MCP endpoint: POST ${prefix}/mcp`,
+          `- OpenAPI spec: GET ${prefix}/openapi.json`,
+          `- Discovery: GET ${prefix}/.well-known/ai`,
+          `- A2A Agent Card: GET ${prefix}/.well-known/agent.json`,
+          `- Agent policy: GET ${prefix}/agents.txt`,
+          `- robots.txt: GET ${prefix}/robots.txt`,
+        ].join("\n"),
+      },
+    ],
   });
+  app.get("/llms.txt", (c) => llmsHandlers.llmsTxt(c));
+  app.get("/llms-full.txt", (c) => llmsHandlers.llmsFullTxt(c));
 
-  // ── llms.txt — LLM-friendly plain-text documentation ──
-  app.get("/llms.txt", (c) => {
-    const lines = [
-      `# ${name}`,
-      `> ${description}`,
-      "",
-      `Version: ${version}`,
-      `Base URL: ${BASE_URL}${prefix}`,
-      "",
-      "## Endpoints",
-      "",
-      ...endpoints.map(
-        (ep) =>
-          `### ${ep.method} ${ep.path}\n${ep.summary}\n${ep.description}${
-            ep.parameters
-              ? "\nParameters:\n" +
-                ep.parameters.map((p: ParameterDef) => `  - ${p.name} (${p.in}): ${p.description}`).join("\n")
-              : ""
-          }\n`
-      ),
-      "## Agent Features",
-      "",
-      `- MCP endpoint: POST ${prefix}/mcp`,
-      `- OpenAPI spec: GET ${prefix}/openapi.json`,
-      `- Discovery: GET ${prefix}/.well-known/ai`,
-      `- A2A Agent Card: GET ${prefix}/.well-known/agent.json`,
-      `- Agent policy: GET ${prefix}/agents.txt`,
-    ];
-    return c.text(lines.join("\n"));
+  // ── agents.txt via @agent-layer/hono ──
+  const agentsTxtHandlers = agentsTxtRoutes({
+    rules: [
+      {
+        agent: "*",
+        allow: ["/"],
+        auth: { type: "none" },
+        rateLimit: { max: 1000, windowSeconds: 3600 },
+        description: `${name} — open demo, no auth required`,
+      },
+    ],
+    siteName: name,
+    contact: "https://github.com/lightlayer-dev/agent-layer-playground",
   });
+  app.get("/agents.txt", (c) => agentsTxtHandlers.agentsTxt(c));
 
-  // ── agents.txt — robot-style policy for AI agents ──
-  app.get("/agents.txt", (c) => {
-    const lines = [
-      `# Agent policy for ${name}`,
-      `# ${BASE_URL}${prefix}`,
-      "",
-      "User-agent: *",
-      "Allow: /",
-      "",
-      `# Discovery`,
-      `MCP: ${prefix}/mcp`,
-      `OpenAPI: ${prefix}/openapi.json`,
-      `AI-Discovery: ${prefix}/.well-known/ai`,
-      `A2A: ${prefix}/.well-known/agent.json`,
-      "",
-      "# Rate limits",
-      "Rate-Limit: 1000/hour",
-      "",
-      "# Skills",
-      ...skills.map((s) => `Skill: ${s}`),
-    ];
-    return c.text(lines.join("\n"));
-  });
-
-  // ── /.well-known/ai — JSON discovery manifest ──
-  app.get("/.well-known/ai", (c) => {
-    return c.json({
-      schema_version: "1.0",
+  // ── Discovery (.well-known/ai) via @agent-layer/hono ──
+  const discoveryHandlers = discoveryRoutes({
+    manifest: {
       name,
       description,
-      url: `${BASE_URL}${prefix}`,
-      version,
-      capabilities: {
-        mcp: { url: `${BASE_URL}${prefix}/mcp`, transport: "streamable-http" },
-        openapi: { url: `${BASE_URL}${prefix}/openapi.json` },
-        a2a: { url: `${BASE_URL}${prefix}/.well-known/agent.json` },
-        llms_txt: { url: `${BASE_URL}${prefix}/llms.txt` },
-        agents_txt: { url: `${BASE_URL}${prefix}/agents.txt` },
-      },
-      skills,
-      rate_limits: { requests_per_hour: 1000 },
-      contact: "https://github.com/lightlayer-dev/agent-layer-playground",
-    });
+    },
   });
+  app.get("/.well-known/ai", (c) => discoveryHandlers.wellKnownAi(c));
 
-  // ── /.well-known/agent.json — A2A Agent Card ──
-  app.get("/.well-known/agent.json", (c) => {
-    return c.json({
+  // ── A2A Agent Card via @agent-layer/hono ──
+  const a2aHandlers = a2aRoutes({
+    card: {
+      protocolVersion: "1.0.0",
       name,
       description,
       url: `${BASE_URL}${prefix}`,
@@ -136,13 +120,21 @@ export function attachAgentLayer(app: Hono, config: DemoConfig) {
         organization: "LightLayer",
         url: "https://github.com/lightlayer-dev",
       },
-    });
+    },
   });
+  app.get("/.well-known/agent.json", (c) => a2aHandlers.agentCard(c));
 
-  // ── MCP endpoint ──
+  // ── robots.txt via @agent-layer/hono ──
+  const robotsHandlers = robotsTxtRoutes({
+    aiAllow: ["/"],
+    sitemaps: [`${BASE_URL}/sitemap.xml`],
+  });
+  app.get("/robots.txt", (c) => robotsHandlers.robotsTxt(c));
+
+  // ── MCP endpoint (custom — uses demo tool handlers) ──
   app.post("/mcp", createMcpHandler(name, version, tools));
 
-  // ── OpenAPI 3.0 spec ──
+  // ── OpenAPI 3.0 spec (custom — uses demo endpoint definitions) ──
   app.get("/openapi.json", (c) => {
     const paths: Record<string, Record<string, unknown>> = {};
 
@@ -196,4 +188,7 @@ export function attachAgentLayer(app: Hono, config: DemoConfig) {
       paths,
     });
   });
+
+  // ── 404 handler ──
+  app.notFound(notFoundHandler());
 }
