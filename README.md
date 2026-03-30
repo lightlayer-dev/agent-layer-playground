@@ -156,9 +156,94 @@ src/
 
 All agent-layer features are implemented **inline** — no external agent-layer packages required. This makes the project fully self-contained and easy to deploy.
 
+## 🧩 Build Your Own with agent-layer Middleware
+
+This playground implements all agent-readiness features **inline** for demonstration purposes. For your own apps, use the **agent-layer** middleware libraries — one line of code gets you everything:
+
+### Supported Frameworks
+
+| Language | Library | Frameworks | Install |
+|----------|---------|------------|---------|
+| **TypeScript** | [agent-layer-ts](https://github.com/lightlayer-dev/agent-layer-ts) | Express, Koa, Hono, Fastify | `npm i @agent-layer/core @agent-layer/express` |
+| **Python** | [agent-layer-python](https://github.com/lightlayer-dev/agent-layer-python) | FastAPI, Flask, Django | `pip install agent-layer[fastapi]` |
+| **Go** | [agent-layer-go](https://github.com/lightlayer-dev/agent-layer-go) | Gin, Echo, Chi | `go get github.com/lightlayer-dev/agent-layer-go` |
+
+### Example: E-Commerce API with Each Framework
+
+<details>
+<summary><strong>Express (TypeScript)</strong></summary>
+
+```ts
+import express from "express";
+import { agentLayer } from "@agent-layer/express";
+
+const app = express();
+app.use(agentLayer({
+  errors: true,
+  rateLimit: { max: 100, windowMs: 60_000 },
+  llmsTxt: { title: "E-Commerce API", description: "Products, cart, and orders" },
+  discovery: { manifest: { name: "E-Commerce API", description: "Products, cart, and orders" } },
+}));
+
+app.get("/products", (req, res) => { /* ... */ });
+app.post("/cart", (req, res) => { /* ... */ });
+app.listen(3000);
+```
+</details>
+
+<details>
+<summary><strong>FastAPI (Python)</strong></summary>
+
+```python
+from fastapi import FastAPI
+from agent_layer.fastapi import AgentLayer
+from agent_layer.core.llms_txt import LlmsTxtConfig
+from agent_layer.core.discovery import DiscoveryConfig, AIManifest
+
+app = FastAPI()
+agent = AgentLayer(
+    llms_txt=LlmsTxtConfig(title="E-Commerce API", description="Products, cart, and orders"),
+    discovery=DiscoveryConfig(manifest=AIManifest(name="E-Commerce API")),
+)
+agent.install(app)
+
+@app.get("/products")
+async def list_products(): ...
+```
+</details>
+
+<details>
+<summary><strong>Gin (Go)</strong></summary>
+
+```go
+package main
+
+import (
+    "github.com/gin-gonic/gin"
+    agentlayer "github.com/lightlayer-dev/agent-layer-go/gin"
+)
+
+func main() {
+    r := gin.Default()
+    r.Use(agentlayer.Middleware(agentlayer.Config{
+        LlmsTxt:   &agentlayer.LlmsTxtConfig{Title: "E-Commerce API", Description: "Products, cart, and orders"},
+        Discovery: &agentlayer.DiscoveryConfig{Name: "E-Commerce API"},
+        RateLimit: &agentlayer.RateLimitConfig{Max: 100, WindowMs: 60000},
+    }))
+
+    r.GET("/products", listProducts)
+    r.Run(":3000")
+}
+```
+</details>
+
+See the [`examples/`](examples/) directory for complete, runnable versions of these snippets.
+
 ## 🔗 Related
 
-- [agent-layer](https://github.com/lightlayer-dev/agent-layer) — Add agent-readiness to any API
+- [agent-layer-ts](https://github.com/lightlayer-dev/agent-layer-ts) — TypeScript middleware (Express, Koa, Hono, Fastify)
+- [agent-layer-python](https://github.com/lightlayer-dev/agent-layer-python) — Python middleware (FastAPI, Flask, Django)
+- [agent-layer-go](https://github.com/lightlayer-dev/agent-layer-go) — Go middleware (Gin, Echo, Chi)
 - [Agent-Readiness Score](https://agent-readiness-score.pages.dev) — Score your API's agent-readiness
 
 ## 📄 License
